@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 
 setup(
-    name='mypackage',
+    name='movie_analysis',
     version='0.1',
     packages=find_packages(),
     install_requires=[
@@ -9,11 +9,10 @@ setup(
         'pycountry',
         'pypopulation',
         'numpy',
-        # Add any other dependencies here
     ],
     entry_points={
         'console_scripts': [
-            'run-analysis=mypackage.run_analysis:main',  # Adjust the command and function as needed
+            'run-main=main:main',  # Adjust the command and function as needed
         ],
     },
     description='A package for analyzing imdb movie data.',
@@ -22,3 +21,4 @@ setup(
     author='Kajetan Bialy',
     url='https://github.com/zorndog/Python-Project',  # Adjust with your repo URL if available
 )
+from setuptools import setup, find_packages
