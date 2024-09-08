@@ -4,6 +4,7 @@ import pycountry
 import pypopulation
 import numpy as np
 
+#Filter the data so it contains only the data from the specified time frame
 def filter_years(basics_unfiltered, title_unfiltered, crew_unfiltered, ratings_unfiltered, start_year, end_year):
     basics_unfiltered['startYear'] = pd.to_numeric(basics_unfiltered['startYear'], errors='coerce')
     basics_filtered = basics_unfiltered[(basics_unfiltered['startYear'].notna()) &
@@ -15,6 +16,7 @@ def filter_years(basics_unfiltered, title_unfiltered, crew_unfiltered, ratings_u
     ratings_filtered = ratings_unfiltered[ratings_unfiltered['tconst'].isin(valid_title_ids)].copy()
     return title_filtered, crew_filtered, ratings_filtered, basics_filtered
 
+#Find what country movie is from (by original title, may contain more than one region)
 def find_movie_regions(title, ratings):
     ratings = ratings.rename(columns={'tconst': 'titleId'})
     rated_titles = title[title['titleId'].isin(ratings['titleId'])]
@@ -29,6 +31,8 @@ def find_movie_regions(title, ratings):
     merged_list = merged.groupby(['titleId', 'title'])['region'].apply(list).reset_index(name='region_list')
     return merged_list
 
+#Specify the country movie was made in. If more than one region is included, take the most frequent.
+# In case a tie, input 'International'.
 def decide_region(df):
     for i in range(df.shape[0]):
         region_list = df.at[i, 'region_list']
@@ -53,6 +57,7 @@ def get_country_name(region_code):
     except (AttributeError, LookupError):
         return 'International'
 
+#Rank countries by GDP
 def add_GDP_with_rank(GDPs_file):
     try:
         GDP = pd.read_csv(GDPs_file, encoding='utf-8')
@@ -80,11 +85,13 @@ def GDP_per_capita(df):
         else 'Unknown', axis=1)
     return df
 
+# Adds a metric based on how many people voted for the movie (more votes - higher rating)
 def add_votes_CDF(df):
     sorted_votes = df.sort_values(by='numVotes')
     df['CDF_votes'] = sorted_votes['numVotes'].rank(method='average', pct=True)
     return df
 
+#Add rank based on population of producing country. Rank 1 - most populated
 def add_population_rank(df):
     df['Population'] = df['Population'].replace('Unknown', pd.NA)
     df['Population'] = pd.to_numeric(df['Population'], errors='coerce')
@@ -93,6 +100,7 @@ def add_population_rank(df):
     df['Population'] = df['Population'].fillna('Unknown')
     return df
 
+#Add rank based on GDPperCapita. Rank 1 - highest GDPperCapita
 def add_GDPperCapita_rank(df):
     df['GDP/Population'] = df['GDP/Population'].replace('Unknown', pd.NA)
     df['GDP/Population'] = pd.to_numeric(df['GDP/Population'], errors='coerce')
@@ -101,6 +109,7 @@ def add_GDPperCapita_rank(df):
     df['GDP/Population'] = df['GDP/Population'].fillna('Unknown')
     return df
 
+#adds a ranking of countries based on the number of movies they have.
 def add_movie_count_per_country_rank(df):
     sorted_votes = df.sort_values(by='numVotes')
     country_movie_count = sorted_votes['country_name'].value_counts().reset_index()
@@ -109,7 +118,15 @@ def add_movie_count_per_country_rank(df):
     df = df.merge(country_movie_count, left_on='country_name', right_on='country_name', how='left')
     return df
 
-def weighted_ranking(df): #Definicja ratingu filmów
+# Ranks top X movies of each country based only on the average votes
+def rank_top_movies(df, X):
+    ranked_df = df.sort_values(by='averageRating', ascending=False).groupby('country_name').head(X)
+    avg_ratings = ranked_df.groupby('country_name')['averageRating'].mean(
+    result_df = pd.DataFrame({'country_name': avg_ratings.index, f'AvgRating_Top_Movies': avg_ratings.values})
+    return result_df
+
+#Definition of ranking for a given movie
+def weighted_ranking(df):
     df['Weighted_rating'] = (
         df['averageRating']**2 *
         (10 + df['rank_gdp'])**(1/2) *
@@ -122,11 +139,11 @@ def weighted_ranking(df): #Definicja ratingu filmów
 
 def cumulative_weighted_ratings(df):
     df = weighted_ranking(df)
-    cumulative_df = df.groupby('country_name')['Weighted_rating'].sum().reset_index()
-    cumulative_df = cumulative_df.sort_values(by='Weighted_rating', ascending=False)
+    cumulative_df = df.groupby('country_name')['Weighted_rating'].sum().reset_index() #by country
+    cumulative_df = cumulative_df.sort_values(by='Weighted_rating', ascending=False) #sort so the highest rating is first
     return cumulative_df
 
-def calculate_director_stats(df): #Rating reżyserów uwzględniejący średnią i wariancję, co najmniej 20 filmów
+def calculate_director_stats(df): #Rating of directors based on the mean and variance of ratings of top movies(at least 20)
     df = df[df['directors'] != '\\N']
     director_counts = df['directors'].value_counts()
     directors_with_at_least_20_movies = director_counts[director_counts >= 20].index
@@ -150,14 +167,3 @@ def calculate_director_stats(df): #Rating reżyserów uwzględniejący średnią
     return director_stats_df
 
 
-def rank_top_movies(df, X):
-    # Group by 'Country' and sort each group by 'averageRating' descending
-    ranked_df = df.sort_values(by='averageRating', ascending=False).groupby('country_name').head(X)
-
-    # Calculate average rating for top X movies for each country
-    avg_ratings = ranked_df.groupby('country_name')['averageRating'].mean()
-
-    # Create DataFrame with results
-    result_df = pd.DataFrame({'country_name': avg_ratings.index, f'AvgRating_Top_Movies': avg_ratings.values})
-
-    return result_df
