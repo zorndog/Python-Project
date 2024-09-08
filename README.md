@@ -1,4 +1,4 @@
-# MyPackage
+# IMDb movies analysis by country
 
 ## Installation
 
